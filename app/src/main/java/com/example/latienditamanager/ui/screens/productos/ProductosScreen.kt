@@ -19,6 +19,10 @@ import com.example.latienditamanager.viewmodel.ProductoViewModel
 import com.example.latienditamanager.viewmodel.ProveedorViewModel
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.ViewList
+
+private enum class VistaProductos { LISTA, REJILLA }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,6 +41,7 @@ fun ProductosScreen(
 
     var productoEditando    by remember { mutableStateOf<ProductoEntity?>(null) }
     var mostrarDialogoNuevo by remember { mutableStateOf(false) }
+    var vistaActual by remember { mutableStateOf(VistaProductos.LISTA) }
 
     Scaffold(
         topBar = {
@@ -50,6 +55,18 @@ fun ProductosScreen(
                     }
                 },
                 actions = {
+                    // Toggle de vista
+                    IconButton(onClick = {
+                        vistaActual = if (vistaActual == VistaProductos.LISTA)
+                            VistaProductos.REJILLA else VistaProductos.LISTA
+                    }) {
+                        Icon(
+                            imageVector = if (vistaActual == VistaProductos.LISTA)
+                                Icons.Default.GridView else Icons.Default.ViewList,
+                            contentDescription = "Cambiar vista",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
                     IconButton(onClick = { mostrarDialogoNuevo = true }) {
                         Icon(Icons.Default.Add, contentDescription = "Añadir producto")
                     }
@@ -97,14 +114,35 @@ fun ProductosScreen(
                         "No se encontró \"$textoBusqueda\"."
                 )
             } else {
-                LazyColumn(
-                    contentPadding      = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(items = productos, key = { it.codigoBarras }) { producto ->
-                        CardProducto(
-                            producto = producto,
-                            onClick  = { productoEditando = producto }
+                when (vistaActual) {
+                    VistaProductos.LISTA -> {
+                        LazyColumn(
+                            contentPadding      = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(items = productos, key = { it.codigoBarras }) { producto ->
+                                CardProducto(
+                                    producto = producto,
+                                    onClick  = { productoEditando = producto }
+                                )
+                            }
+                        }
+                    }
+                    VistaProductos.REJILLA -> {
+                        // Recopilar relaciones de proveedor para todos los productos
+                        val relacionesMap = productos.associate { producto ->
+                            val relaciones by proveedorViewModel
+                                .obtenerProveedorPrincipalDeProducto(producto.codigoBarras)
+                                .collectAsState(initial = emptyList())
+                            producto.codigoBarras to (relaciones.find { it.esPrincipal }
+                                ?: relaciones.firstOrNull())
+                        }
+
+                        VistaRejilla(
+                            productos           = productos,
+                            proveedores         = proveedores,
+                            relacionesProveedor = relacionesMap,
+                            onProductoClick     = { productoEditando = it }
                         )
                     }
                 }
